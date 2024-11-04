@@ -99,17 +99,6 @@ impl Emulator {
             _default => {
                 println!("Potentially unknown opcode? {:04X}", opcode);
             }
-            
         }
     }
-    
-    fn extract_nybls(opcode: u16) -> (u8, u8, u8, u8) {
-        let nybl_0 = ((opcode >> 12) & 0x0F) as u8; // High nybl
-        let nybl_1 = ((opcode >> 8) & 0x0F) as u8;  // Second nybl
-        let nybl_2 = ((opcode >> 4) & 0x0F) as u8;  // Third nybl
-        let nybl_3 = (opcode & 0x0F) as u8;         // Low nybl
-
-        (nybl_0, nybl_1, nybl_2, nybl_3)
-    }
-
 }
