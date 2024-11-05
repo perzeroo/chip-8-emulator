@@ -21,6 +21,10 @@ impl Memory {
         self.data[start_address..end_address].copy_from_slice(&buffer);
         Ok(())
     }
+
+    pub fn read_data(&self, address: usize) -> u8 {
+        self.data[address]
+    }
     
     pub fn read_instruction(&self, address: usize) -> u16 { // Instructions on the CHIP-8 are
                                                             // 16bits long, also it's in big endian

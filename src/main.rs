@@ -3,6 +3,7 @@ mod memory;
 mod emulator;
 mod renderer;
 use std::env;
+use std::thread;
 use std::process;
 use macroquad::prelude::*;
 
@@ -30,15 +31,16 @@ async fn main() {
     }
     emu.prepare();
     emu.clock();
+    let emulator_logic_thread = thread::spawn(move || {
+        loop {
+            //do clock
+        }
+    });
 
     loop {
-        clear_background(BLACK);
-        draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
-        draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
-
-        draw_text("Hello World!", 20.0, 20.0, 30.0, DARKGRAY);
-
+        emu.renderer.do_render();
         next_frame().await
     }
 }
+
 

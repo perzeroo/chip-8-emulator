@@ -6,10 +6,10 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 
 pub struct Emulator {
-    pub proc: Processor,
+    proc: Processor,
     pub mem: Memory,
     rng: ThreadRng,
-    renderer: Renderer,
+    pub renderer: Renderer,
 }
 
 impl Emulator {
@@ -35,8 +35,6 @@ impl Emulator {
         let mut opcode: u16 = self.mem.read_instruction(self.proc.program_counter);
         println!("Fetched instruction at 0x{:04X}: {:04X}", self.proc.program_counter, opcode);
         self.proc.program_counter += 2;
-
-        opcode = 0x3ABC; 
 
         match opcode {
             0x00E0 => { // Clear the screen
@@ -196,10 +194,25 @@ impl Emulator {
             
             // generate random number to register Vx and perform an & operation on it
             _ if (opcode & 0xF000) == 0xC000 => {
-                self.proc.set_register(((opcode << 8) & 0x0F) as u8, self.rng.gen::<u8>() & (opcode & 0x00FF) as u8);
+                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, self.rng.gen::<u8>() & (opcode & 0x00FF) as u8);
             }
 
-            //_ if (opcode & 0xF000) == 0xC000 => {
+            _ if (opcode & 0xF000) == 0xD000 => {
+                let x = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+                let y = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
+                let height = (opcode & 0x0F) as u8;
+                let sprite_begin = self.proc.address_register;
+                let sprite_end = self.proc.address_register + height as u16;
+
+                let mut sprite = Vec::<u8>::new();
+                for i in sprite_begin..sprite_end {
+                    sprite.push(self.mem.read_data(i as usize));
+                } 
+
+                self.renderer.draw_sprite(x, y, sprite);
+            }
+
+            
 
             _default => {
                 println!("Potentially unknown opcode? {:04X}", opcode);
