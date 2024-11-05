@@ -1,6 +1,7 @@
 mod processor;
 mod memory;
 mod emulator;
+mod renderer;
 use std::env;
 use std::process;
 use macroquad::prelude::*;

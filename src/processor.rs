@@ -4,7 +4,7 @@ pub struct Processor {
     pub registers: [u8; 16],
     pub address_register: u16,
     pub program_counter : usize,
-    pub stack: [u16; 16],
+    pub stack: [u16; 12],
     pub stack_pointer: usize,
 }
 
@@ -53,7 +53,7 @@ impl Default for Processor {
             registers: [0; 16],
             address_register: 0,
             program_counter: 0,
-            stack: [0; 16],
+            stack: [0; 12],
             stack_pointer: 0,
         }
     }

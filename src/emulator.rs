@@ -1,10 +1,15 @@
 use crate::processor::*;
 use crate::memory::*;
+use crate::renderer::*;
 use std::process;
+use rand::rngs::ThreadRng;
+use rand::Rng;
 
 pub struct Emulator {
     pub proc: Processor,
     pub mem: Memory,
+    rng: ThreadRng,
+    renderer: Renderer,
 }
 
 impl Emulator {
@@ -12,6 +17,8 @@ impl Emulator {
         Emulator {
             proc: Processor::default(),
             mem: Memory::new(),
+            rng: rand::thread_rng(),
+            renderer: Renderer::new(),
         }
     }
     
@@ -33,7 +40,7 @@ impl Emulator {
 
         match opcode {
             0x00E0 => { // Clear the screen
-
+                self.renderer.clear_pixels();
             }
 
             0x00EE => { // Return out of subroutine
@@ -95,6 +102,104 @@ impl Emulator {
                 self.proc.set_register(((opcode >> 8) & 0x0F) as u8, self.proc.get_register(((opcode >> 4) & 0x0F) as u8));
             }
 
+            // Vx |= Vy
+            _ if (opcode & 0xF00F) == 0x8001 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                self.proc.set_register(register_x, register_x_value | register_y_value);
+            }
+            
+            // Vx &= Vy
+            _ if (opcode & 0xF00F) == 0x8002 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                self.proc.set_register(register_x, register_x_value & register_y_value);
+            }
+
+            // Vx ^= Vy
+            _ if (opcode & 0xF00F) == 0x8003 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                self.proc.set_register(register_x, register_x_value ^ register_y_value);
+            }
+
+            // Vx += Vy
+            _ if (opcode & 0xF00F) == 0x8004 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let (value, overflowed) = register_x_value.overflowing_add(register_y_value);
+                self.proc.set_register(register_x, value);
+                self.proc.set_register(0xF, if overflowed {1} else {0});
+            }
+
+            // Vx -= Vy
+            _ if (opcode & 0xF00F) == 0x8005 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let (value, overflowed) = register_x_value.overflowing_sub(register_y_value);
+                self.proc.set_register(register_x, value);
+                self.proc.set_register(0xF, if overflowed {1} else {0});
+            }
+
+            // Vx >>= 1
+            _ if (opcode & 0xF00F) == 0x8006 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let value = register_x_value >> 1;
+                self.proc.set_register(register_x, value);
+                self.proc.set_register(0xF, register_x_value & 1);
+            }
+
+            // Vx = Vy - Vx
+            _ if (opcode & 0xF00F) == 0x8007 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let (value, overflowed) = register_y_value.overflowing_sub(register_x_value);
+                self.proc.set_register(register_x, value);
+                self.proc.set_register(0xF, if overflowed {1} else {0});
+            }
+
+            // Vx <<= 1
+            _ if (opcode & 0xF00F) == 0x8008 => {
+                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x_value = self.proc.get_register(register_x);
+                let value = register_x_value << 1;
+                self.proc.set_register(register_x, value);
+                self.proc.set_register(0xF, register_x_value & 128);
+            }
+
+            // if (Vx == Vy) skip instruction
+            _ if (opcode & 0xF00F) == 0x9000 => {
+                let register_x_value = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
+
+                if register_x_value != register_y_value {
+                    self.proc.program_counter += 2;
+                }
+            }
+
+            // address_register points to address NNN
+            _ if (opcode & 0xF000) == 0xA000 => {
+                self.proc.address_register = ((opcode << 4) as u16) >> 4;
+            }
+
+            // jump to address NNN
+            _ if (opcode & 0xF000) == 0xB000 => {
+                self.proc.program_counter = (((opcode << 4) as u16) >> 4) as usize;
+            }
+            
+            // generate random number to register Vx and perform an & operation on it
+            _ if (opcode & 0xF000) == 0xC000 => {
+                self.proc.set_register(((opcode << 8) & 0x0F) as u8, self.rng.gen::<u8>() & (opcode & 0x00FF) as u8);
+            }
+
+            //_ if (opcode & 0xF000) == 0xC000 => {
 
             _default => {
                 println!("Potentially unknown opcode? {:04X}", opcode);
