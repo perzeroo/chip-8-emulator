@@ -36,6 +36,9 @@ impl Emulator {
         println!("Fetched instruction at 0x{:04X}: {:04X}", self.proc.program_counter, opcode);
         self.proc.program_counter += 2;
 
+        self.proc.address_register = 0x200;
+        opcode = 0xD002;
+
         match opcode {
             0x00E0 => { // Clear the screen
                 self.renderer.clear_pixels();
@@ -208,11 +211,13 @@ impl Emulator {
                 for i in sprite_begin..sprite_end {
                     sprite.push(self.mem.read_data(i as usize));
                 } 
-
-                self.renderer.draw_sprite(x, y, sprite);
+                
+                self.proc.set_register(0x0F, if self.renderer.draw_sprite(x, y, sprite) {1} else {0});
             }
 
-            
+            _ if (opcode & 0xF0FF) == 0xE09E => {
+                let register_key = self.proc.
+            }
 
             _default => {
                 println!("Potentially unknown opcode? {:04X}", opcode);

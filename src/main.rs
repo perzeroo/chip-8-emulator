@@ -2,6 +2,7 @@ mod processor;
 mod memory;
 mod emulator;
 mod renderer;
+mod keyboard;
 use std::env;
 use std::thread;
 use std::process;

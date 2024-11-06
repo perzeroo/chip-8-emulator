@@ -26,9 +26,10 @@ impl Renderer {
         
     }
 
-    pub fn draw_sprite(&mut self, x: u8, y: u8, sprite: Vec<u8>) {
+    pub fn draw_sprite(&mut self, x: u8, y: u8, sprite: Vec<u8>) -> bool {
         let mut pixels = self.pixels_mutex.lock().unwrap();
         let mut current_y = y;
+        let mut written_pixel = false;
         for block in sprite.iter() {
             if current_y >= 32 {
                 break;
@@ -38,12 +39,16 @@ impl Renderer {
                     break;
                 }
                 let current_pixel: usize = (current_y as usize) * 64 + i + x as usize;
+                if pixels[current_pixel] != ((block << i) & 128) >> 7 && !written_pixel {
+                    written_pixel = true;
+                }
                 pixels[current_pixel] = ((block << i) & 128) >> 7; // render the byte left to right
                 // not sure if correct
 
             }
             current_y += 1;
         }
+        written_pixel
     }
 
     pub fn do_render(&mut self) {
