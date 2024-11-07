@@ -1,7 +1,11 @@
 use crate::processor::*;
 use crate::memory::*;
 use crate::renderer::*;
+use crate::keyboard::*;
 use std::process;
+use std::thread::sleep;
+use std::thread::sleep_ms;
+use std::time::Duration;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
@@ -31,6 +35,8 @@ impl Emulator {
             eprintln!("Program counter exceeded 4095, max memory");
             process::exit(1);
         }
+
+        self.proc.delay_timer.clock();
 
         let mut opcode: u16 = self.mem.read_instruction(self.proc.program_counter);
         println!("Fetched instruction at 0x{:04X}: {:04X}", self.proc.program_counter, opcode);
@@ -200,6 +206,7 @@ impl Emulator {
                 self.proc.set_register(((opcode >> 8) & 0x0F) as u8, self.rng.gen::<u8>() & (opcode & 0x00FF) as u8);
             }
 
+            // draw sprite to pixels array
             _ if (opcode & 0xF000) == 0xD000 => {
                 let x = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
                 let y = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
@@ -215,8 +222,66 @@ impl Emulator {
                 self.proc.set_register(0x0F, if self.renderer.draw_sprite(x, y, sprite) {1} else {0});
             }
 
+            // skips if key in Vx is pressed
             _ if (opcode & 0xF0FF) == 0xE09E => {
-                let register_key = self.proc.
+                let register_key = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+                if register_key == get_hexkey_pressed() {
+                    self.proc.program_counter += 2;
+                }
+            }
+
+            // skips if key in Vx isnt pressed
+            _ if (opcode & 0xF0FF) == 0xE0A1 => {
+                let register_key = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+                if register_key != get_hexkey_pressed() {
+                    self.proc.program_counter += 2;
+                }
+            }
+
+            // sets Vx to the value of the delay timer
+            _ if (opcode & 0xF0FF) == 0xF007=> {
+                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, self.proc.delay_timer.value);
+            }
+
+            // sets the value of Vx to the pressed key, wait for key press
+            _ if (opcode & 0xF0FF) == 0xF00A => {
+                let mut key = get_hexkey_pressed();
+                while key > 15 {
+                    sleep(Duration::from_millis(16));
+                    key = get_hexkey_pressed();
+                }
+                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, get_hexkey_pressed());
+            }
+            
+            // sets the value of the delay timer to the value in Vx
+            _ if (opcode & 0xF0FF) == 0xF015 => {
+                self.proc.delay_timer.value = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+            }
+
+            // sets the value of the sound timer to the value of Vx
+            _ if (opcode & 0xF0FF) == 0xF018 => {
+            }
+
+            // adds the value of Vx to I
+            _ if (opcode & 0xF0FF) == 0xF01E => {
+                self.proc.address_register += self.proc.get_register(((opcode >> 8) & 0x0F) as u8) as u16;
+            }
+
+            // sets I to the location of Vx font sprite
+            _ if (opcode & 0xF0FF) == 0xF029 => {
+                self.proc.address_register = self.proc.get_register(((opcode >> 8) & 0x0F) as u8) as u16 * 5;
+            }
+
+            _ if (opcode & 0xF0FF) == 0xF033 => {
+                let register_x_value = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+                self.mem.write_data(self.proc.address_register as usize, register_x_value / 100);
+                self.mem.write_data(self.proc.address_register as usize + 1, (register_x_value / 10) % 10);
+                self.mem.write_data(self.proc.address_register as usize + 2, register_x_value % 10);
+            }
+
+            _ if (opcode & 0xF0FF) == 0xF055 => {
+                let end_index = ((opcode >> 8) & 0x0F) as u8;
+                
             }
 
             _default => {

@@ -30,6 +30,15 @@ async fn main() {
             process::exit(1);
         }
     }
+
+    match emu.mem.load_rom_at_location("./font-data.bin", 0x0) {
+        Ok(_) => println!("ROM successfully loaded into Memory"),
+        Err(e) => {
+            eprintln!("Failed to load ROM into Memory: {}", e);
+            process::exit(1);
+        }
+    }
+
     emu.prepare();
     emu.clock();
     let emulator_logic_thread = thread::spawn(move || {

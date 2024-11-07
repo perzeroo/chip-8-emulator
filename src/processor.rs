@@ -1,4 +1,12 @@
-use std::process;
+use std::{process, time::{Duration, Instant}};
+
+use rand::seq::index;
+
+pub struct DelayTimer {
+    pub value: u8,
+    pub last_update: Instant,
+    pub interval: Duration,
+}
 
 pub struct Processor {
     pub registers: [u8; 16],
@@ -6,6 +14,26 @@ pub struct Processor {
     pub program_counter : usize,
     pub stack: [u16; 12],
     pub stack_pointer: usize,
+    pub delay_timer: DelayTimer,
+}
+
+impl DelayTimer {
+    pub fn new() -> Self {
+        DelayTimer {
+            value: 0,
+            last_update: Instant::now(),
+            interval: Duration::from_secs_f64(1.0 / 64.0),
+        }
+    }
+
+    pub fn clock(&mut self) {
+        if self.last_update.elapsed() >= self.interval {
+            if self.value > 0 {
+                self.value -= 1;
+            }
+            self.last_update = Instant::now();
+        }
+    }
 }
 
 impl Processor {
@@ -23,6 +51,18 @@ impl Processor {
             true
         } else {
             false
+        }
+    }
+
+    pub fn get_registers<const N: usize>(&self) -> [u8; N] {
+        if N < 17 {
+            let mut return_array: [u8; N] = [0; N];
+            for i in 0..N {
+                return_array[i] = self.registers[i];
+            }
+            return_array
+        }  else {
+            [0; N]
         }
     }
 
@@ -55,6 +95,7 @@ impl Default for Processor {
             program_counter: 0,
             stack: [0; 12],
             stack_pointer: 0,
+            delay_timer: DelayTimer::new(),
         }
     }
 }
