@@ -32,6 +32,15 @@ impl Memory {
     pub fn write_data(&mut self, address: usize, data: u8) {
         self.data[address] = data;
     }
+
+    pub fn print_mem(&self) {
+        for (i, val) in self.data.iter().enumerate() {
+            print!("{:02X} ", val);
+            if i > 0 && i % 128 == 0 {
+                println!("");
+            }
+        }
+    }
     
     pub fn read_instruction(&self, address: usize) -> u16 { // Instructions on the CHIP-8 are
                                                             // 16bits long, also it's in big endian

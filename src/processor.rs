@@ -1,7 +1,5 @@
 use std::{process, time::{Duration, Instant}};
 
-use rand::seq::index;
-
 pub struct DelayTimer {
     pub value: u8,
     pub last_update: Instant,
@@ -28,6 +26,7 @@ impl DelayTimer {
 
     pub fn clock(&mut self) {
         if self.last_update.elapsed() >= self.interval {
+                println!("herere {}", self.value);
             if self.value > 0 {
                 self.value -= 1;
             }
@@ -54,15 +53,15 @@ impl Processor {
         }
     }
 
-    pub fn get_registers<const N: usize>(&self) -> [u8; N] {
-        if N < 17 {
-            let mut return_array: [u8; N] = [0; N];
-            for i in 0..N {
-                return_array[i] = self.registers[i];
+    pub fn get_registers(&self, end_index: u8) -> [u8; 16] {
+        if end_index < 16 {
+            let mut return_array: [u8; 16] = [0; 16];
+            for i in 0..(end_index+1) {
+                return_array[i as usize] = self.registers[i as usize];
             }
             return_array
         }  else {
-            [0; N]
+            [0; 16]
         }
     }
 

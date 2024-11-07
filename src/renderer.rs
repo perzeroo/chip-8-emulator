@@ -15,15 +15,9 @@ impl Renderer {
     pub fn clear_pixels(&mut self) {
         let mut pixels = self.pixels_mutex.lock().unwrap();
 
-        let mut it = 0;
         for pixel in pixels.iter_mut() {
-            *pixel = if it % 3 == 0 {1} else {0};
-            it += 1;
+            *pixel = 0;
         }
-    }
-
-    pub fn draw_pixel(&mut self, x: u8, y: u8) {
-        
     }
 
     pub fn draw_sprite(&mut self, x: u8, y: u8, sprite: Vec<u8>) -> bool {

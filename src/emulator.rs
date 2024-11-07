@@ -2,18 +2,21 @@ use crate::processor::*;
 use crate::memory::*;
 use crate::renderer::*;
 use crate::keyboard::*;
+use std::mem;
 use std::process;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread::sleep;
-use std::thread::sleep_ms;
 use std::time::Duration;
+use std::usize;
+use rand::random;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
 pub struct Emulator {
     proc: Processor,
     pub mem: Memory,
-    rng: ThreadRng,
-    pub renderer: Renderer,
+    //pub renderer: Renderer,
 }
 
 impl Emulator {
@@ -21,8 +24,7 @@ impl Emulator {
         Emulator {
             proc: Processor::default(),
             mem: Memory::new(),
-            rng: rand::thread_rng(),
-            renderer: Renderer::new(),
+            //renderer: Renderer::new(),
         }
     }
     
@@ -30,7 +32,7 @@ impl Emulator {
         self.proc.program_counter = 0x200;
     }
     
-    pub fn clock(&mut self) {
+    pub fn clock(&mut self, renderer_mutex: Arc<Mutex<Renderer>>, keyboard_mutex: Arc<Mutex<Keyboard>>) {
         if self.proc.program_counter >= 4094 {
             eprintln!("Program counter exceeded 4095, max memory");
             process::exit(1);
@@ -38,16 +40,13 @@ impl Emulator {
 
         self.proc.delay_timer.clock();
 
-        let mut opcode: u16 = self.mem.read_instruction(self.proc.program_counter);
-        println!("Fetched instruction at 0x{:04X}: {:04X}", self.proc.program_counter, opcode);
+        let opcode: u16 = self.mem.read_instruction(self.proc.program_counter);
         self.proc.program_counter += 2;
-
-        self.proc.address_register = 0x200;
-        opcode = 0xD002;
 
         match opcode {
             0x00E0 => { // Clear the screen
-                self.renderer.clear_pixels();
+                let mut renderer = renderer_mutex.lock().unwrap();
+                (*renderer).clear_pixels();
             }
 
             0x00EE => { // Return out of subroutine
@@ -101,7 +100,8 @@ impl Emulator {
             // Adds value to register
             _ if (opcode & 0xF000) == 0x7000 => { 
                 let register_value = ((opcode >> 8) & 0x0F) as u8;
-                self.proc.set_register(register_value, register_value + opcode as u8);
+                let value = register_value.overflowing_add(opcode as u8).0;
+                self.proc.set_register(register_value, value);
             }
 
             // Sets value in register x to value in register y
@@ -203,7 +203,8 @@ impl Emulator {
             
             // generate random number to register Vx and perform an & operation on it
             _ if (opcode & 0xF000) == 0xC000 => {
-                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, self.rng.gen::<u8>() & (opcode & 0x00FF) as u8);
+                let random_num: u8 = random();
+                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, random_num & (opcode & 0x00FF) as u8);
             }
 
             // draw sprite to pixels array
@@ -219,13 +220,15 @@ impl Emulator {
                     sprite.push(self.mem.read_data(i as usize));
                 } 
                 
-                self.proc.set_register(0x0F, if self.renderer.draw_sprite(x, y, sprite) {1} else {0});
+                let mut renderer = renderer_mutex.lock().unwrap();
+                self.proc.set_register(0x0F, if (*renderer).draw_sprite(x, y, sprite) {1} else {0});
             }
 
             // skips if key in Vx is pressed
             _ if (opcode & 0xF0FF) == 0xE09E => {
                 let register_key = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
-                if register_key == get_hexkey_pressed() {
+                let mut keyboard = keyboard_mutex.lock().unwrap(); 
+                if register_key == keyboard.get_hexkey_pressed() {
                     self.proc.program_counter += 2;
                 }
             }
@@ -233,7 +236,8 @@ impl Emulator {
             // skips if key in Vx isnt pressed
             _ if (opcode & 0xF0FF) == 0xE0A1 => {
                 let register_key = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
-                if register_key != get_hexkey_pressed() {
+                let mut keyboard = keyboard_mutex.lock().unwrap(); 
+                if register_key != keyboard.get_hexkey_pressed() {
                     self.proc.program_counter += 2;
                 }
             }
@@ -245,17 +249,20 @@ impl Emulator {
 
             // sets the value of Vx to the pressed key, wait for key press
             _ if (opcode & 0xF0FF) == 0xF00A => {
-                let mut key = get_hexkey_pressed();
+                let mut keyboard = keyboard_mutex.lock().unwrap(); 
+                let mut key = keyboard.get_hexkey_pressed();
                 while key > 15 {
-                    sleep(Duration::from_millis(16));
-                    key = get_hexkey_pressed();
+                    mem::drop(keyboard);
+                    keyboard = keyboard_mutex.lock().unwrap();
+                    key = keyboard.get_hexkey_pressed();
                 }
-                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, get_hexkey_pressed());
+                self.proc.set_register(((opcode >> 8) & 0x0F) as u8, keyboard.get_hexkey_pressed());
             }
             
             // sets the value of the delay timer to the value in Vx
             _ if (opcode & 0xF0FF) == 0xF015 => {
                 self.proc.delay_timer.value = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
+                println!("heere {}", self.proc.delay_timer.value);
             }
 
             // sets the value of the sound timer to the value of Vx
@@ -272,6 +279,7 @@ impl Emulator {
                 self.proc.address_register = self.proc.get_register(((opcode >> 8) & 0x0F) as u8) as u16 * 5;
             }
 
+            // write value of Vx BCD coded at I
             _ if (opcode & 0xF0FF) == 0xF033 => {
                 let register_x_value = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
                 self.mem.write_data(self.proc.address_register as usize, register_x_value / 100);
@@ -279,9 +287,21 @@ impl Emulator {
                 self.mem.write_data(self.proc.address_register as usize + 2, register_x_value % 10);
             }
 
+            // write all registers up to Vx to memory at I
             _ if (opcode & 0xF0FF) == 0xF055 => {
                 let end_index = ((opcode >> 8) & 0x0F) as u8;
-                
+                let register_data_array = self.proc.get_registers(end_index);
+
+                for i in 0..(end_index+1) {
+                    self.mem.write_data((self.proc.address_register + i as u16) as usize, register_data_array[i as usize]);
+                }
+            }
+
+            _ if (opcode & 0xF0FF) == 0xF065 => {
+                let end_index = ((opcode >> 8) & 0x0F) as u8;
+                for i in 0..(end_index+1) {
+                    self.proc.set_register(i, self.mem.read_data((self.proc.address_register + i as u16) as usize));
+                }
             }
 
             _default => {
