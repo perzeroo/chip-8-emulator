@@ -36,8 +36,13 @@ impl Renderer {
                 if pixels[current_pixel] != ((block << i) & 128) >> 7 && !written_pixel {
                     written_pixel = true;
                 }
-                pixels[current_pixel] = ((block << i) & 128) >> 7; // render the byte left to right
-                // not sure if correct
+                if (((block << i) & 128) >> 7) == 1 {
+                    if pixels[current_pixel] == 0 {
+                        pixels[current_pixel] = 1;
+                    } else {
+                        pixels[current_pixel] = 0;
+                    }
+                }
 
             }
             current_y += 1;

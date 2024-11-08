@@ -20,7 +20,7 @@ impl DelayTimer {
         DelayTimer {
             value: 0,
             last_update: Instant::now(),
-            interval: Duration::from_secs_f64(1.0 / 64.0),
+            interval: Duration::from_secs_f64(1.0 / 60.0),
         }
     }
 
@@ -48,6 +48,7 @@ impl Processor {
             self.registers[index as usize] = value;
             true
         } else {
+            println!("Tried to index register larger than 0xF");
             false
         }
     }
