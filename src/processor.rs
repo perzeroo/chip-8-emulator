@@ -26,7 +26,6 @@ impl DelayTimer {
 
     pub fn clock(&mut self) {
         if self.last_update.elapsed() >= self.interval {
-                println!("herere {}", self.value);
             if self.value > 0 {
                 self.value -= 1;
             }

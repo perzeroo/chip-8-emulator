@@ -53,20 +53,17 @@ async fn main() {
         }
 
         emu.prepare();
-        sleep(Duration::from_millis(500));
         loop {
             emu.clock(renderer_copy.clone(), keyboard_mutex_copy.clone());
         }
     });
 
-    sleep(Duration::from_secs(1));
 
     loop {
         let mut keyboard = keyboard_mutex.lock().unwrap(); 
 
         if let Some(key) = get_last_key_pressed() {
             (*keyboard).last_key_pressed = key;
-            println!("{}", key as u16);
         } else {
             if is_key_released((*keyboard).last_key_pressed) {
                 (*keyboard).last_key_pressed = KeyCode::Z;

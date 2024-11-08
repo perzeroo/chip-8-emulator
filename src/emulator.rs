@@ -6,6 +6,7 @@ use std::mem;
 use std::process;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use std::usize;
@@ -42,6 +43,8 @@ impl Emulator {
 
         let opcode: u16 = self.mem.read_instruction(self.proc.program_counter);
         self.proc.program_counter += 2;
+
+        println!("Fetched instruction: {:04X}", opcode);
 
         match opcode {
             0x00E0 => { // Clear the screen
@@ -111,33 +114,33 @@ impl Emulator {
 
             // Vx |= Vy
             _ if (opcode & 0xF00F) == 0x8001 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
-                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
                 self.proc.set_register(register_x, register_x_value | register_y_value);
             }
             
             // Vx &= Vy
             _ if (opcode & 0xF00F) == 0x8002 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
-                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
                 self.proc.set_register(register_x, register_x_value & register_y_value);
             }
 
             // Vx ^= Vy
             _ if (opcode & 0xF00F) == 0x8003 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
-                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
                 self.proc.set_register(register_x, register_x_value ^ register_y_value);
             }
 
             // Vx += Vy
             _ if (opcode & 0xF00F) == 0x8004 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
-                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
                 let (value, overflowed) = register_x_value.overflowing_add(register_y_value);
                 self.proc.set_register(register_x, value);
                 self.proc.set_register(0xF, if overflowed {1} else {0});
@@ -145,9 +148,9 @@ impl Emulator {
 
             // Vx -= Vy
             _ if (opcode & 0xF00F) == 0x8005 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
-                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
                 let (value, overflowed) = register_x_value.overflowing_sub(register_y_value);
                 self.proc.set_register(register_x, value);
                 self.proc.set_register(0xF, if overflowed {1} else {0});
@@ -155,7 +158,7 @@ impl Emulator {
 
             // Vx >>= 1
             _ if (opcode & 0xF00F) == 0x8006 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
                 let value = register_x_value >> 1;
                 self.proc.set_register(register_x, value);
@@ -164,9 +167,9 @@ impl Emulator {
 
             // Vx = Vy - Vx
             _ if (opcode & 0xF00F) == 0x8007 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
-                let register_y_value = self.proc.get_register(((opcode >> 4) ^ 0x0F) as u8);
+                let register_y_value = self.proc.get_register(((opcode >> 4) & 0x0F) as u8);
                 let (value, overflowed) = register_y_value.overflowing_sub(register_x_value);
                 self.proc.set_register(register_x, value);
                 self.proc.set_register(0xF, if overflowed {1} else {0});
@@ -174,7 +177,7 @@ impl Emulator {
 
             // Vx <<= 1
             _ if (opcode & 0xF00F) == 0x8008 => {
-                let register_x = ((opcode >> 8) ^ 0x0F) as u8;
+                let register_x = ((opcode >> 8) & 0x0F) as u8;
                 let register_x_value = self.proc.get_register(register_x);
                 let value = register_x_value << 1;
                 self.proc.set_register(register_x, value);
@@ -193,12 +196,12 @@ impl Emulator {
 
             // address_register points to address NNN
             _ if (opcode & 0xF000) == 0xA000 => {
-                self.proc.address_register = ((opcode << 4) as u16) >> 4;
+                self.proc.address_register = opcode & 0x0FFF;
             }
 
             // jump to address NNN
             _ if (opcode & 0xF000) == 0xB000 => {
-                self.proc.program_counter = (((opcode << 4) as u16) >> 4) as usize;
+                self.proc.program_counter = opcode as usize & 0x0FFF;
             }
             
             // generate random number to register Vx and perform an & operation on it
@@ -262,7 +265,6 @@ impl Emulator {
             // sets the value of the delay timer to the value in Vx
             _ if (opcode & 0xF0FF) == 0xF015 => {
                 self.proc.delay_timer.value = self.proc.get_register(((opcode >> 8) & 0x0F) as u8);
-                println!("heere {}", self.proc.delay_timer.value);
             }
 
             // sets the value of the sound timer to the value of Vx
@@ -308,5 +310,6 @@ impl Emulator {
                 println!("Potentially unknown opcode? {:04X}", opcode);
             }
         }
+        thread::sleep(Duration::from_millis(1));
     }
 }
